@@ -1,4 +1,6 @@
-from Notq.Notq import *
+from notq.Notq import *
+
+from notq import sentiment
 
 # Microsoft
 subscription="<paste-your-speech-key-here>"
@@ -66,9 +68,8 @@ print(xy,yz,zx,xw,wy,wz) '''
 
 
 ## TEST /sentiment/
-''' print(sentiment(['دوست داشتنی بود'
-                                        ,'واقعا از قدرت نویسنده لذت بردم داستان کوتاهیه ولی به قول یکی از دوستان داستان تا همیشه گوشه‌ای از ذهن ادم‌میمونه خیلی خوب بود خیلی'
-                                        ,'اصلا خوب نبود'])) '''
+print(sentiment(['دوست داشتنی بود','واقعا از قدرت نویسنده لذت بردم داستان کوتاهیه ولی به قول یکی از دوستان داستان تا همیشه گوشه‌ای از ذهن ادم‌میمونه خیلی خوب بود خیلی'
+                                        ,'اصلا خوب نبود','من عاشقت هستم','به جهنم','این جا شبیه بهشته','خاک توی سرت']))
 
 
 ## Test /caclulate_fluency/ (defualt)

@@ -21,11 +21,12 @@ import speech_recognition as sr
 # Sentiment
 import numpy as np
 from tqdm.notebook import tqdm
-from transformers import BertConfig, BertTokenizer
+from transformers import BertConfig, BertTokenizer, AutoModel
 from transformers import BertModel
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from transformers.modeling_outputs import BaseModelOutputWithPoolingAndCrossAttentions
 
 labels = ['negative', 'positive']
 
@@ -61,15 +62,14 @@ import IPython.display as ipd
 import numpy as np
 import pandas as pd
 
-import torch
-import torch.nn as nn
 from torch.nn import BCEWithLogitsLoss, CrossEntropyLoss, MSELoss
+from transformers import AutoTokenizer, AutoModelForSequenceClassification
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 model_name_or_path = "m3hrdadfi/wav2vec2-xlsr-persian-speech-emotion-recognition"
 config = AutoConfig.from_pretrained(model_name_or_path)
 feature_extractor = Wav2Vec2FeatureExtractor.from_pretrained(model_name_or_path)
-emotion_sampling_rate = feature_extractor.emotion_sampling_rate
+emotion_sampling_rate = feature_extractor.sampling_rate
 
 
 
@@ -335,44 +335,24 @@ def cosineSimilarity(sentence1, sentence2, similarityModel):
 MODEL_NAME_OR_PATH = 'HooshvareLab/bert-fa-base-uncased'
 
 def sentiment(listOfSentence):
-    
-    device = setup_device()
 
-    # general config
-    MAX_LEN = 128
-    TRAIN_BATCH_SIZE = 16
-    VALID_BATCH_SIZE = 16
-    TEST_BATCH_SIZE = 16
 
-    EPOCHS = 3
-    EEVERY_EPOCH = 1000
-    LEARNING_RATE = 2e-5
-    CLIP = 0.0
-   
-    
+    tokenizer = AutoTokenizer.from_pretrained("HooshvareLab/bert-fa-base-uncased-sentiment-digikala")
 
-    # create a key finder based on label 2 id and id to label
-    label2id = {label: i for i, label in enumerate(labels)}
-    id2label = {v: k for k, v in label2id.items()}
+    model = AutoModelForSequenceClassification.from_pretrained("HooshvareLab/bert-fa-base-uncased-sentiment-digikala")
 
-    print(f'label2id: {label2id}')
-    print(f'id2label: {id2label}')
+    predictions = []
+    predictions_prob = []
+    for i in range(len(listOfSentence)):
+        inputs = tokenizer(listOfSentence[i], return_tensors="pt")
+        with torch.no_grad():
+            logits = model(**inputs).logits
+        predicted_class_id = logits.argmax().item()
+        predictions.append(predicted_class_id)
+        p = torch.nn.functional.softmax(logits, dim=1)
+        predictions_prob.append(p[0][predicted_class_id].numpy())
 
-    # setup the tokenizer and configuration
-    tokenizer = BertTokenizer.from_pretrained(MODEL_NAME_OR_PATH)
-    config = BertConfig.from_pretrained(
-        MODEL_NAME_OR_PATH, **{
-            'label2id': label2id,
-            'id2label': id2label,
-        })
-
-    x_model = SentimentModel(config=config)
-    x_model = x_model.to(device)
-    x_model.load_state_dict(torch.load(MODEL_NAME_OR_PATH , map_location=torch.device('cpu')))#if gpu is ready delete map location arg
-
-    pred,prob = predict(x_model ,np.array(listOfSentence) ,tokenizer,max_len=128)
-
-    return pred,prob
+    return predictions, predictions_prob
  
 class SentimentModel(nn.Module):
     
@@ -473,26 +453,28 @@ def predict(model, comments, tokenizer, max_len=128, batch_size=32):
     model.eval()
     with torch.no_grad():
         for dl in tqdm(data_loader, position=0):
-            input_ids = dl['input_ids']
-            attention_mask = dl['attention_mask']
-            token_type_ids = dl['token_type_ids']
-
-            # move tensors to GPU if CUDA is available
-            input_ids = input_ids.to(device)
-            attention_mask = attention_mask.to(device)
-            token_type_ids = token_type_ids.to(device)
-            
-            # compute predicted outputs by passing inputs to the model
-            outputs = model(
-                input_ids=input_ids,
-                attention_mask=attention_mask,
-                token_type_ids=token_type_ids)
-            
-            # convert output probabilities to predicted class
-            _, preds = torch.max(outputs, dim=1)
-
-            predictions.extend(preds)
-            prediction_probs.extend(F.softmax(outputs, dim=1))
+            p = model.predict(data_loader)
+            print(p)
+            # input_ids = dl['input_ids']
+            # attention_mask = dl['attention_mask']
+            # token_type_ids = dl['token_type_ids']
+            #
+            # # move tensors to GPU if CUDA is available
+            # input_ids = input_ids.to(device)
+            # attention_mask = attention_mask.to(device)
+            # token_type_ids = token_type_ids.to(device)
+            #
+            # # compute predicted outputs by passing inputs to the model
+            # outputs = model(
+            #     input_ids=input_ids,
+            #     attention_mask=attention_mask,
+            #     token_type_ids=token_type_ids)
+            #
+            # # convert output probabilities to predicted class
+            # _, preds = torch.max(outputs.pooler_output, dim=1)
+            #
+            # predictions.extend(preds)
+            # prediction_probs.extend(F.softmax(outputs.pooler_output, dim=1))
 
     predictions = torch.stack(predictions).cpu().detach().numpy()
     prediction_probs = torch.stack(prediction_probs).cpu().detach().numpy()
@@ -509,6 +491,7 @@ def silenceTime(audio_file_path, min_silence_time=100, silence_threshhold = None
     Silence = [((start/1000),(stop/1000)) for start,stop in Silence] #convert to sec
 
     return Silence
+
 
 def splitAudiofile(audio_file_path, output_directory_path=None, dividing_len=60):
 
